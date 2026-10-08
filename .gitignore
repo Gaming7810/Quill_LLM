@@ -1,0 +1,8 @@
+# dataset (re-created by train/prepare.py)
+data/
+# training checkpoints and logs
+train/out/
+train/train_stdout.txt
+__pycache__/
+# rust
+engine/target/
