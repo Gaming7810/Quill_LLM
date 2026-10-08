@@ -5,7 +5,7 @@ wrote the engine that runs it in Rust without an ML framework. The engine handle
 attention, a KV cache, int8 quantization and multithreading, and it compiles to
 WebAssembly so the model runs entirely in the browser.
 
-**[Live demo](https://gaming7810.github.io/neww/)** · [Benchmarks](#results) · [What didn't work](#what-didnt-work)
+**[Live demo](https://gaming7810.github.io/Quill_LLM/)** · [Benchmarks](#results) · [What didn't work](#what-didnt-work)
 
 ```
 $ quill generate --prompt "JULIET:"
