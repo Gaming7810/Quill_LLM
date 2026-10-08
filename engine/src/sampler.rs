@@ -20,7 +20,13 @@ impl Rng {
 pub fn argmax(x: &[f32]) -> usize {
     x.iter()
         .enumerate()
-        .fold((0, f32::NEG_INFINITY), |(bi, bv), (i, &v)| if v > bv { (i, v) } else { (bi, bv) })
+        .fold((0, f32::NEG_INFINITY), |(bi, bv), (i, &v)| {
+            if v > bv {
+                (i, v)
+            } else {
+                (bi, bv)
+            }
+        })
         .0
 }
 
@@ -30,7 +36,10 @@ pub fn sample(logits: &[f32], temperature: f32, rng: &mut Rng) -> usize {
         return argmax(logits);
     }
     let max = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-    let probs: Vec<f32> = logits.iter().map(|&l| ((l - max) / temperature).exp()).collect();
+    let probs: Vec<f32> = logits
+        .iter()
+        .map(|&l| ((l - max) / temperature).exp())
+        .collect();
     let total: f32 = probs.iter().sum();
     let mut r = rng.next_f32() * total;
     for (i, &p) in probs.iter().enumerate() {
@@ -56,7 +65,9 @@ mod tests {
         // ln(3) vs 0: token 0 should come up ~75% of the time.
         let logits = [3f32.ln(), 0.0];
         let mut rng = Rng::new(42);
-        let hits = (0..10_000).filter(|_| sample(&logits, 1.0, &mut rng) == 0).count();
+        let hits = (0..10_000)
+            .filter(|_| sample(&logits, 1.0, &mut rng) == 0)
+            .count();
         assert!((7_200..7_800).contains(&hits), "{hits}");
     }
 }

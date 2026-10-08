@@ -25,13 +25,21 @@ fn load_vectors() -> Vectors {
     let (n, vocab) = (u32_at(4), u32_at(8));
     let tokens = (0..n).map(|i| u32_at(12 + 4 * i)).collect();
     let off = 12 + 4 * n;
-    let logits = b[off..].chunks_exact(4).map(|c| f32::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>();
+    let logits = b[off..]
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+        .collect::<Vec<_>>();
     assert_eq!(logits.len(), n * vocab);
-    Vectors { tokens, vocab, logits }
+    Vectors {
+        tokens,
+        vocab,
+        logits,
+    }
 }
 
 fn load_model() -> Transformer {
-    let bytes = std::fs::read(model_dir().join("shakespeare.bin")).expect("run train/export.py first");
+    let bytes =
+        std::fs::read(model_dir().join("shakespeare.bin")).expect("run train/export.py first");
     Transformer::from_bytes(&bytes).unwrap()
 }
 
@@ -72,8 +80,20 @@ fn int8_stays_close_to_pytorch() {
 fn kv_cache_restart_is_deterministic() {
     let v = load_vectors();
     let mut model = load_model();
-    let first: Vec<f32> = v.tokens.iter().take(8).enumerate().map(|(p, &t)| model.forward(t, p)[0]).collect();
-    let again: Vec<f32> = v.tokens.iter().take(8).enumerate().map(|(p, &t)| model.forward(t, p)[0]).collect();
+    let first: Vec<f32> = v
+        .tokens
+        .iter()
+        .take(8)
+        .enumerate()
+        .map(|(p, &t)| model.forward(t, p)[0])
+        .collect();
+    let again: Vec<f32> = v
+        .tokens
+        .iter()
+        .take(8)
+        .enumerate()
+        .map(|(p, &t)| model.forward(t, p)[0])
+        .collect();
     assert_eq!(first, again);
 }
 

@@ -14,12 +14,17 @@ impl Tokenizer {
             .enumerate()
             .filter_map(|(i, s)| s.chars().next().map(|c| (c, i)))
             .collect();
-        Tokenizer { vocab: vocab.to_vec(), index }
+        Tokenizer {
+            vocab: vocab.to_vec(),
+            index,
+        }
     }
 
     /// Characters outside the vocabulary are skipped.
     pub fn encode(&self, text: &str) -> Vec<usize> {
-        text.chars().filter_map(|c| self.index.get(&c).copied()).collect()
+        text.chars()
+            .filter_map(|c| self.index.get(&c).copied())
+            .collect()
     }
 
     pub fn decode(&self, token: usize) -> &str {
@@ -33,7 +38,10 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let vocab: Vec<String> = ["\n", " ", "a", "b"].iter().map(|s| s.to_string()).collect();
+        let vocab: Vec<String> = ["\n", " ", "a", "b"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let t = Tokenizer::new(&vocab);
         let ids = t.encode("ab ba\nz");
         assert_eq!(ids, vec![2, 3, 1, 3, 2, 0]);

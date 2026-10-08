@@ -38,11 +38,13 @@ where
     {
         use rayon::prelude::*;
         const ROWS_PER_TASK: usize = 32;
-        out.par_chunks_mut(ROWS_PER_TASK).enumerate().for_each(|(c, chunk)| {
-            for (j, o) in chunk.iter_mut().enumerate() {
-                f(c * ROWS_PER_TASK + j, o);
-            }
-        });
+        out.par_chunks_mut(ROWS_PER_TASK)
+            .enumerate()
+            .for_each(|(c, chunk)| {
+                for (j, o) in chunk.iter_mut().enumerate() {
+                    f(c * ROWS_PER_TASK + j, o);
+                }
+            });
     }
     #[cfg(not(feature = "parallel"))]
     for (i, o) in out.iter_mut().enumerate() {

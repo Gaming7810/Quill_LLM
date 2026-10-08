@@ -27,7 +27,11 @@ impl Config {
 
 /// Weight storage for a linear layer: full precision or int8.
 pub enum Linear {
-    F32 { w: Vec<f32>, rows: usize, cols: usize },
+    F32 {
+        w: Vec<f32>,
+        rows: usize,
+        cols: usize,
+    },
     Q8(QTensor),
 }
 
@@ -79,7 +83,9 @@ pub struct Layer {
 
 impl Layer {
     fn linears(&self) -> [&Linear; 7] {
-        [&self.wq, &self.wk, &self.wv, &self.wo, &self.w1, &self.w2, &self.w3]
+        [
+            &self.wq, &self.wk, &self.wv, &self.wo, &self.w1, &self.w2, &self.w3,
+        ]
     }
 }
 
@@ -112,7 +118,8 @@ struct Reader<'a> {
 impl<'a> Reader<'a> {
     fn bytes(&mut self, n: usize) -> Result<&'a [u8], LoadError> {
         let end = self.pos.checked_add(n).filter(|&e| e <= self.buf.len());
-        let end = end.ok_or_else(|| LoadError(format!("unexpected end of file at byte {}", self.pos)))?;
+        let end =
+            end.ok_or_else(|| LoadError(format!("unexpected end of file at byte {}", self.pos)))?;
         let s = &self.buf[self.pos..end];
         self.pos = end;
         Ok(s)
@@ -128,11 +135,17 @@ impl<'a> Reader<'a> {
 
     fn f32s(&mut self, n: usize) -> Result<Vec<f32>, LoadError> {
         let b = self.bytes(n * 4)?;
-        Ok(b.chunks_exact(4).map(|c| f32::from_le_bytes(c.try_into().unwrap())).collect())
+        Ok(b.chunks_exact(4)
+            .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+            .collect())
     }
 
     fn linear(&mut self, rows: usize, cols: usize) -> Result<Linear, LoadError> {
-        Ok(Linear::F32 { w: self.f32s(rows * cols)?, rows, cols })
+        Ok(Linear::F32 {
+            w: self.f32s(rows * cols)?,
+            rows,
+            cols,
+        })
     }
 }
 
@@ -223,8 +236,10 @@ impl Transformer {
             norm_eps: r.f32()?,
             rope_theta: r.f32()?,
         };
-        if n_heads == 0 || dim % n_heads != 0 || config.head_dim() % 2 != 0 {
-            return Err(LoadError(format!("dim {dim} not divisible into {n_heads} even-sized heads")));
+        if n_heads == 0 || !dim.is_multiple_of(n_heads) || !config.head_dim().is_multiple_of(2) {
+            return Err(LoadError(format!(
+                "dim {dim} not divisible into {n_heads} even-sized heads"
+            )));
         }
 
         let mut vocab = Vec::with_capacity(vocab_size);
@@ -253,13 +268,22 @@ impl Transformer {
         if r.pos != buf.len() {
             return Err(LoadError(format!("{} trailing bytes", buf.len() - r.pos)));
         }
-        let output = Linear::F32 { w: tok_embeddings.clone(), rows: vocab_size, cols: dim };
+        let output = Linear::F32 {
+            w: tok_embeddings.clone(),
+            rows: vocab_size,
+            cols: dim,
+        };
 
         Ok(Transformer {
             state: RunState::new(&config),
             config,
             vocab,
-            weights: Weights { tok_embeddings, layers, norm, output },
+            weights: Weights {
+                tok_embeddings,
+                layers,
+                norm,
+                output,
+            },
         })
     }
 
@@ -268,12 +292,28 @@ impl Transformer {
     pub fn quantize(mut self) -> Self {
         let w = &mut self.weights;
         for l in w.layers.iter_mut() {
-            for lin in [&mut l.wq, &mut l.wk, &mut l.wv, &mut l.wo, &mut l.w1, &mut l.w2, &mut l.w3] {
-                let owned = std::mem::replace(lin, Linear::F32 { w: Vec::new(), rows: 0, cols: 0 });
+            for lin in [
+                &mut l.wq, &mut l.wk, &mut l.wv, &mut l.wo, &mut l.w1, &mut l.w2, &mut l.w3,
+            ] {
+                let owned = std::mem::replace(
+                    lin,
+                    Linear::F32 {
+                        w: Vec::new(),
+                        rows: 0,
+                        cols: 0,
+                    },
+                );
                 *lin = owned.quantize();
             }
         }
-        let out = std::mem::replace(&mut w.output, Linear::F32 { w: Vec::new(), rows: 0, cols: 0 });
+        let out = std::mem::replace(
+            &mut w.output,
+            Linear::F32 {
+                w: Vec::new(),
+                rows: 0,
+                cols: 0,
+            },
+        );
         w.output = out.quantize();
         self
     }
@@ -301,7 +341,11 @@ impl Transformer {
     pub fn forward(&mut self, token: usize, pos: usize) -> &[f32] {
         let c = &self.config;
         assert!(token < c.vocab_size, "token {token} out of range");
-        assert!(pos < c.max_seq_len, "position {pos} exceeds max_seq_len {}", c.max_seq_len);
+        assert!(
+            pos < c.max_seq_len,
+            "position {pos} exceeds max_seq_len {}",
+            c.max_seq_len
+        );
         let (dim, hd, half) = (c.dim, c.head_dim(), c.head_dim() / 2);
         let w = &self.weights;
         let s = &mut self.state;
@@ -315,7 +359,11 @@ impl Transformer {
             let kv_off = (li * c.max_seq_len + pos) * dim;
             l.wq.forward(&mut s.q, &s.xb, &mut s.xq_dim);
             l.wk.forward(&mut s.key_cache[kv_off..kv_off + dim], &s.xb, &mut s.xq_dim);
-            l.wv.forward(&mut s.value_cache[kv_off..kv_off + dim], &s.xb, &mut s.xq_dim);
+            l.wv.forward(
+                &mut s.value_cache[kv_off..kv_off + dim],
+                &s.xb,
+                &mut s.xq_dim,
+            );
 
             // Rotary embeddings on q and the freshly cached k.
             let cos = &s.rope_cos[pos * half..(pos + 1) * half];

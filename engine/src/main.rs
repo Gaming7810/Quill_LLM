@@ -30,12 +30,16 @@ impl Args {
         let rest: Vec<String> = it.collect();
         let mut i = 0;
         while i < rest.len() {
-            let key = rest[i].strip_prefix("--").ok_or_else(|| format!("unexpected argument {}", rest[i]))?;
+            let key = rest[i]
+                .strip_prefix("--")
+                .ok_or_else(|| format!("unexpected argument {}", rest[i]))?;
             if key == "q8" {
                 opts.insert(key.into(), "true".into());
                 i += 1;
             } else {
-                let val = rest.get(i + 1).ok_or_else(|| format!("missing value for --{key}"))?;
+                let val = rest
+                    .get(i + 1)
+                    .ok_or_else(|| format!("missing value for --{key}"))?;
                 opts.insert(key.into(), val.clone());
                 i += 2;
             }
@@ -46,12 +50,17 @@ impl Args {
     fn get<T: std::str::FromStr>(&self, key: &str, default: T) -> Result<T> {
         match self.opts.get(key) {
             None => Ok(default),
-            Some(v) => v.parse().map_err(|_| format!("invalid value for --{key}: {v}").into()),
+            Some(v) => v
+                .parse()
+                .map_err(|_| format!("invalid value for --{key}: {v}").into()),
         }
     }
 
     fn str(&self, key: &str, default: &str) -> String {
-        self.opts.get(key).cloned().unwrap_or_else(|| default.into())
+        self.opts
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| default.into())
     }
 
     fn q8(&self) -> bool {
@@ -106,7 +115,10 @@ fn generate(model: &mut Transformer, prompt: &str, steps: usize, temp: f32, seed
         }
     }
     let secs = start.elapsed().as_secs_f64();
-    eprintln!("\n\n[{steps} tokens in {secs:.2}s, {:.0} tok/s]", steps as f64 / secs);
+    eprintln!(
+        "\n\n[{steps} tokens in {secs:.2}s, {:.0} tok/s]",
+        steps as f64 / secs
+    );
 }
 
 /// Greedy decoding from an empty context; returns tokens per second.
@@ -134,7 +146,12 @@ struct Eval {
 
 /// Mean next-token cross-entropy over non-overlapping windows of the
 /// validation set (same windows as train/export.py's reference loss).
-fn evaluate(model: &mut Transformer, data: &[u8], windows: usize, mut reference: Option<&mut Transformer>) -> Eval {
+fn evaluate(
+    model: &mut Transformer,
+    data: &[u8],
+    windows: usize,
+    mut reference: Option<&mut Transformer>,
+) -> Eval {
     let t = model.config.max_seq_len;
     let windows = windows.min((data.len() - 1) / t);
     let (mut nll, mut agree) = (0.0f64, 0usize);
@@ -143,7 +160,12 @@ fn evaluate(model: &mut Transformer, data: &[u8], windows: usize, mut reference:
         for pos in 0..t {
             let logits = model.forward(chunk[pos] as usize, pos);
             let max = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max) as f64;
-            let lse = max + logits.iter().map(|&l| (l as f64 - max).exp()).sum::<f64>().ln();
+            let lse = max
+                + logits
+                    .iter()
+                    .map(|&l| (l as f64 - max).exp())
+                    .sum::<f64>()
+                    .ln();
             nll += lse - logits[chunk[pos + 1] as usize] as f64;
             if let Some(r) = reference.as_deref_mut() {
                 let mine = argmax(logits);
@@ -154,7 +176,10 @@ fn evaluate(model: &mut Transformer, data: &[u8], windows: usize, mut reference:
         }
     }
     let n = (windows * t) as f64;
-    Eval { loss: nll / n, agreement: reference.map(|_| agree as f64 / n) }
+    Eval {
+        loss: nll / n,
+        agreement: reference.map(|_| agree as f64 / n),
+    }
 }
 
 fn mb(bytes: usize) -> f64 {
@@ -185,12 +210,20 @@ fn report(args: &Args) -> Result<()> {
         let mut model = load(&model_path, q8)?;
         let (linear, other) = model.weight_bytes();
         let eval = with_threads(max_threads, || {
-            evaluate(&mut model, &data, windows, if q8 { Some(&mut fp32) } else { None })
+            evaluate(
+                &mut model,
+                &data,
+                windows,
+                if q8 { Some(&mut fp32) } else { None },
+            )
         })?;
         let mut speeds = Vec::new();
         for &th in &thread_counts {
             let tps = with_threads(th, || bench(&mut model, steps))?;
-            eprintln!("{} threads={th}: {tps:.0} tok/s", if q8 { "int8" } else { "fp32" });
+            eprintln!(
+                "{} threads={th}: {tps:.0} tok/s",
+                if q8 { "int8" } else { "fp32" }
+            );
             speeds.push((th, tps));
         }
         rows.push((q8, linear, other, eval, speeds));
@@ -199,8 +232,10 @@ fn report(args: &Args) -> Result<()> {
     // JSON by hand to keep the crate dependency-free.
     let mut json = String::from("{\n  \"results\": [\n");
     for (i, (q8, linear, other, eval, speeds)) in rows.iter().enumerate() {
-        let speeds_json: Vec<String> =
-            speeds.iter().map(|(t, s)| format!("{{\"threads\": {t}, \"tokens_per_s\": {s:.1}}}")).collect();
+        let speeds_json: Vec<String> = speeds
+            .iter()
+            .map(|(t, s)| format!("{{\"threads\": {t}, \"tokens_per_s\": {s:.1}}}"))
+            .collect();
         json += &format!(
             "    {{\"precision\": \"{}\", \"linear_weight_bytes\": {linear}, \"other_weight_bytes\": {other}, \
              \"val_loss\": {:.4}, \"perplexity\": {:.4}, \"argmax_agreement_with_fp32\": {}, \"speed\": [{}]}}{}\n",
@@ -218,9 +253,18 @@ fn report(args: &Args) -> Result<()> {
     }
     std::fs::write(&out_path, json)?;
 
-    println!("| precision | linear weights | val loss | perplexity | top-1 agreement vs fp32 | {} |",
-        thread_counts.iter().map(|t| format!("tok/s ({t} thr)")).collect::<Vec<_>>().join(" | "));
-    println!("|---|---|---|---|---|{}", "---|".repeat(thread_counts.len()));
+    println!(
+        "| precision | linear weights | val loss | perplexity | top-1 agreement vs fp32 | {} |",
+        thread_counts
+            .iter()
+            .map(|t| format!("tok/s ({t} thr)"))
+            .collect::<Vec<_>>()
+            .join(" | ")
+    );
+    println!(
+        "|---|---|---|---|---|{}",
+        "---|".repeat(thread_counts.len())
+    );
     for (q8, linear, _, eval, speeds) in &rows {
         println!(
             "| {} | {:.2} MB | {:.4} | {:.3} | {} | {} |",
@@ -228,8 +272,13 @@ fn report(args: &Args) -> Result<()> {
             mb(*linear),
             eval.loss,
             eval.loss.exp(),
-            eval.agreement.map_or("—".into(), |a| format!("{:.1}%", a * 100.0)),
-            speeds.iter().map(|(_, s)| format!("{s:.0}")).collect::<Vec<_>>().join(" | ")
+            eval.agreement
+                .map_or("—".into(), |a| format!("{:.1}%", a * 100.0)),
+            speeds
+                .iter()
+                .map(|(_, s)| format!("{s:.0}"))
+                .collect::<Vec<_>>()
+                .join(" | ")
         );
     }
     eprintln!("wrote {out_path}");
@@ -245,7 +294,11 @@ fn run() -> Result<()> {
         "generate" => {
             let mut model = load(&model_path, args.q8())?;
             let prompt = args.str("prompt", "ROMEO:\n");
-            let (steps, temp, seed) = (args.get("steps", 500)?, args.get("temp", 0.8)?, args.get("seed", 42)?);
+            let (steps, temp, seed) = (
+                args.get("steps", 500)?,
+                args.get("temp", 0.8)?,
+                args.get("seed", 42)?,
+            );
             with_threads(threads, || generate(&mut model, &prompt, steps, temp, seed))?;
         }
         "bench" => {
@@ -266,7 +319,11 @@ fn run() -> Result<()> {
             let data = std::fs::read(args.str("data", "data/val.bin"))?;
             let windows = args.get("windows", 64)?;
             let eval = with_threads(threads, || evaluate(&mut model, &data, windows, None))?;
-            println!("val loss {:.4}, perplexity {:.4}", eval.loss, eval.loss.exp());
+            println!(
+                "val loss {:.4}, perplexity {:.4}",
+                eval.loss,
+                eval.loss.exp()
+            );
         }
         "report" => report(&args)?,
         _ => {

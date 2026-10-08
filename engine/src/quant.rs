@@ -20,8 +20,16 @@ pub struct QTensor {
 
 impl QTensor {
     pub fn zeros(rows: usize, cols: usize) -> Self {
-        assert!(cols % GROUP_SIZE == 0, "cols ({cols}) must be a multiple of {GROUP_SIZE}");
-        QTensor { q: vec![0; rows * cols], scales: vec![0.0; rows * cols / GROUP_SIZE], rows, cols }
+        assert!(
+            cols.is_multiple_of(GROUP_SIZE),
+            "cols ({cols}) must be a multiple of {GROUP_SIZE}"
+        );
+        QTensor {
+            q: vec![0; rows * cols],
+            scales: vec![0.0; rows * cols / GROUP_SIZE],
+            rows,
+            cols,
+        }
     }
 
     pub fn from_f32(x: &[f32], rows: usize, cols: usize) -> Self {
@@ -142,7 +150,10 @@ mod tests {
         let (rows, cols) = (48, 4 * GROUP_SIZE);
         let w = pseudo_random(rows * cols, 7);
         let x = pseudo_random(cols, 9);
-        let (wq, xq) = (QTensor::from_f32(&w, rows, cols), QTensor::from_f32(&x, 1, cols));
+        let (wq, xq) = (
+            QTensor::from_f32(&w, rows, cols),
+            QTensor::from_f32(&x, 1, cols),
+        );
         let mut exact = vec![0.0; rows];
         matmul(&mut exact, &w, &x);
         let mut approx = vec![0.0; rows];
