@@ -1,0 +1,8 @@
+{
+  "results": [
+    {"precision": "fp32", "linear_weight_bytes": 20513792, "other_weight_bytes": 79872, "val_loss": 1.4726, "perplexity": 4.3607, "argmax_agreement_with_fp32": null, "speed": [{"threads": 1, "tokens_per_s": 844.2}, {"threads": 2, "tokens_per_s": 1247.3}, {"threads": 4, "tokens_per_s": 1130.2}]},
+    {"precision": "int8", "linear_weight_bytes": 5769504, "other_weight_bytes": 79872, "val_loss": 1.4728, "perplexity": 4.3613, "argmax_agreement_with_fp32": 0.9942, "speed": [{"threads": 1, "tokens_per_s": 1131.5}, {"threads": 2, "tokens_per_s": 1426.8}, {"threads": 4, "tokens_per_s": 1147.9}]}
+  ],
+  "steps": 128,
+  "windows": 871
+}

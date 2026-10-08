@@ -40,7 +40,7 @@ def throughput():
     ax.set_ylabel("tokens / second")
     ax.set_xticks(threads)
     ax.set_ylim(bottom=0)
-    ax.set_title("Decoding throughput (batch 1, native)")
+    ax.set_title("Decoding throughput (batch 1, 4-core CPU)")
     ax.grid(alpha=0.3)
     ax.legend()
     fig.tight_layout()
