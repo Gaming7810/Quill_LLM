@@ -8,19 +8,16 @@ WebAssembly so the model runs entirely in the browser.
 **[Live demo](https://gaming7810.github.io/neww/)** · [Benchmarks](#results) · [What didn't work](#what-didnt-work)
 
 ```
-$ quill generate --prompt "ROMEO:" --temp 0.8
-ROMEO:
-We have some courtesy of the chider. What saws
-What, what could be buck, for his eyes there be
-both the wind there, I am not to be too come.
-
-LADY ANNE:
-Why, no more: thou wilt not dead, and say 'twas I can,
-Nor nor a mourner leanness of the sun.
-
-GREMIO:
-No, I know not I; if that importable say thy hand,
-of all my dear enemy to the heart; where I thyself?
+$ quill generate --prompt "JULIET:"
+JULIET:
+Thou art most news like a queen with the prover-night;
+His hands all such conference to give him how;
+But who not to the matter of these treasure
+And he of our sickless commission
+To his heir enemy in the son, and that proceeds
+I would sanctuary to my lamb; for thou, permit me
+all the people still purpose of a grace of itself,
+yet I have prigout of my daughter.
 ```
 
 ## How it fits together
@@ -42,7 +39,7 @@ PyTorch operation has a hand-written counterpart in Rust.
 
 **Correctness is tested, not assumed.** `export.py` saves PyTorch's logits for a fixed
 input, and `engine/tests/pytorch_parity.rs` checks that the Rust engine reproduces them.
-The fp32 path matches to within 7×10⁻⁶ (max absolute logit difference). The int8
+The fp32 path matches to within 6×10⁻⁶ (max absolute logit difference). The int8
 path is checked to pick the same next token. CI runs these tests, plus clippy, rustfmt
 and a WebAssembly smoke test in Node, on every push.
 
@@ -54,8 +51,8 @@ and a WebAssembly smoke test in Node, on every push.
 | Size | 6 layers, 8 heads, d_model 256, d_ff 768 — **5.13M parameters** |
 | Tokenizer | Character-level, 65 symbols |
 | Data | [Tiny Shakespeare](https://github.com/karpathy/char-rnn) (1.1M characters, 90/10 split) |
-| Training | 2,000 steps × 32 sequences × 128 chars, AdamW, cosine LR, dropout 0.1 — **28 minutes on a 4-core CPU** |
-| Result | validation loss **1.473** nats/char (perplexity 4.36) |
+| Training | 2,000 steps × 32 sequences × 128 chars, AdamW, cosine LR, dropout 0.1, bf16 mixed precision — **48 seconds on an RTX 5070** (the same run took 28 minutes on a 4-core cloud CPU) |
+| Result | validation loss **1.469** nats/char (perplexity 4.34) on the full validation set |
 
 ![training curve](results/training_curve.png)
 
@@ -72,71 +69,94 @@ Activations are quantized the same way just before each matmul, so the inner loo
 
 ## Results
 
-Native build (not WebAssembly), batch size 1, generating 128 tokens from an empty context (median of 5 runs).
-Perplexity is measured on all 871 non-overlapping 128-character windows of the
-validation set. "Agreement" is the fraction of positions where int8 predicts the same
-most likely next character as fp32.
+### Quality
+
+Measured on all 871 non-overlapping 128-character windows of the validation set
+(111k predictions). "Agreement" is the fraction of positions where int8 predicts the
+same most likely next character as fp32.
 
 | | fp32 | int8 |
 |---|---|---|
 | Linear-layer weights | 20.5 MB | **5.8 MB** (3.6× smaller) |
-| Validation loss (nats/char) | 1.4726 | 1.4728 (+0.0002) |
-| Perplexity | 4.361 | 4.361 |
-| Same top-1 prediction as fp32 | — | 99.4% |
-| tok/s, 1 thread | 844 | **1,131** (1.34×) |
-| tok/s, 2 threads | 1,247 | **1,427** |
-| tok/s, 4 threads | 1,130 | 1,148 |
-| tok/s, 1 thread, `-C target-cpu=native` | ~720 | **~1,440** |
-| tok/s, WebAssembly (Node 22, 1 thread) | **~450** | ~215 |
+| Validation loss (nats/char) | 1.4690 | 1.4691 (+0.0001) |
+| Perplexity | 4.345 | 4.345 |
+| Same top-1 prediction as fp32 | — | 99.5% |
 
-Raw numbers: [`results/benchmarks.json`](results/benchmarks.json). Regenerate them with
-`quill report`. This is a shared 4-vCPU cloud VM, so expect ±10% between runs. The
-`target-cpu=native` and WebAssembly rows are medians of repeated runs.
+PyTorch's loss on the same windows is **1.4690**. The Rust fp32 engine gives the same
+number, as it should.
 
-PyTorch reference loss on the same windows: **1.4726**. The Rust fp32 engine gives
-the same number, as it should.
+### Speed
 
-![throughput](results/throughput.png)
+Generating 128 tokens one at a time (batch size 1), in tokens per second. I measured on
+two machines with very different caches, and the results disagree in an instructive way.
 
-**Takeaways**
+| | **Ryzen 7 7800X3D**<br>8 cores / 16 threads, 96 MB L3 | **Cloud VM**<br>4 vCPUs, shared |
+|---|---|---|
+| fp32, 1 thread | 2,212 | 844 |
+| int8, 1 thread | 1,504 – 2,037 | 1,131 |
+| fp32, best thread count | 3,442 (8 threads) | 1,247 (2 threads) |
+| int8, best thread count | 2,923 (8 threads) | 1,427 (2 threads) |
+| fp32, 1 thread, `-C target-cpu=native` | 1,773 | ~720 |
+| int8, 1 thread, `-C target-cpu=native` | **2,944** | **~1,440** |
+| WebAssembly (Node 22), fp32 / int8 | — | ~450 / ~215 |
 
-- **int8 costs almost nothing in quality.** Validation loss moves by 0.0002 nats, and the
-  quantized model picks the same next character as fp32 at 99.4% of the 111k validation
-  positions.
-- **It is smaller and faster on CPU.** The linear weights shrink 3.6×. Decoding is 1.34×
-  faster with a portable build. When the compiler may use the CPU's integer dot-product
-  instructions (AVX-512 VNNI, `-C target-cpu=native`), int8 reaches ~1,440 tok/s on one
-  thread, 1.65× the fastest fp32 build.
-- **More threads stopped helping after 2.** See below.
+Raw numbers for the Ryzen run are in [`results/benchmarks.json`](results/benchmarks.json).
+Regenerate them with `quill report`. Desktop runs are noisy: the portable int8 build
+measured 1,504 tok/s in `report` and 2,037 in a separate run, so I report the range.
+
+![throughput on the Ryzen 7 7800X3D](results/throughput.png)
+
+### Takeaways
+
+- **int8 costs almost nothing in quality.** Validation loss moves by 0.0001 nats, and
+  int8 agrees with fp32 on the next character 99.5% of the time.
+- **Whether int8 is faster depends on the machine.** On the cloud VM, int8 is 1.34×
+  faster even with a portable build. On the 7800X3D, it isn't: the fp32 weights
+  (20.5 MB) fit entirely in the 96 MB L3 cache, so reading less memory saves little,
+  and the portable build's integer loop costs more than it saves. When the compiler may
+  use the CPU's integer dot-product instructions (AVX-512 VNNI, `-C target-cpu=native`),
+  int8 becomes the fastest option at 2,944 tok/s, 1.33× the best single-thread fp32
+  build. So on this CPU, int8's advantage comes from cheaper arithmetic rather than less
+  memory traffic. That interpretation fits all the numbers, but I haven't measured cache
+  misses directly yet.
+- **A GPU changes the training loop, not just the speed.** 48 seconds per run instead of
+  28 minutes makes hyperparameter sweeps practical.
 
 ## What didn't work
 
-1. **Four threads are slower than two.** One token needs about 1 ms of work, spread over
-   43 matmuls (6 layers × 7, plus the output projection), so each parallel region lasts
-   roughly 25 µs. At that size, waking and synchronizing rayon workers costs about as much
-   as the work they share. The `report` run spent 4m43s of its 14m37s of CPU time in the
-   kernel. Ideas: parallelize across attention heads within a larger fused region, or
-   decode several sequences at once so each matmul has more work.
-2. **int8 is 2× *slower* than fp32 in WebAssembly** (~215 vs ~450 tok/s), the opposite of
-   native. My hypothesis, not yet verified, is that baseline WebAssembly SIMD has no 8-bit
-   dot-product instruction, so the widening `i8 × i8 → i32` loop compiles to many more
-   instructions than the f32 one. The demo therefore defaults to fp32. Next step: try
-   the relaxed-SIMD `i32x4.relaxed_dot_i8x16_i7x16_add` instruction.
-3. **`-C target-cpu=native` made fp32 ~18% slower** (~875 → ~720 tok/s, median of three
-   runs each) while making int8 ~34% faster (~1,080 → ~1,440). I don't understand the fp32 regression yet. The
-   next step is to compare the generated assembly for `ops::dot` (`cargo asm`) and test
-   whether the AVX-512 code path is responsible.
-4. **A small evaluation set misled me.** The first 64 validation windows gave a loss of
-   1.30, but the full validation set gives 1.47. The start of the held-out text is simply
-   easier than average. All numbers above use the whole validation set (871 windows).
-5. **The model is starting to overfit.** At the end of training, training loss is 1.17
+1. **Multithreading scales poorly.** One token needs about 0.5 ms of single-thread work
+   on the Ryzen, spread over 43 matmuls (6 layers × 7, plus the output projection), so
+   each parallel region lasts only about 10 µs. Waking and synchronizing rayon workers
+   costs about as much as the work they share. Eight cores give only 1.56×, and 16
+   threads are slower than 8, because each pair of hardware threads shares one core's
+   execution units. On the 4-vCPU cloud VM, throughput already peaked at 2 threads.
+   Ideas: parallelize across attention heads within a larger fused region, or decode
+   several sequences at once so each matmul has more work.
+2. **int8 is 2× *slower* than fp32 in WebAssembly** (~215 vs ~450 tok/s). My hypothesis,
+   not yet verified, is that baseline WebAssembly SIMD has no 8-bit dot-product
+   instruction, so the widening `i8 × i8 → i32` loop compiles to many more instructions
+   than the f32 one. The demo therefore defaults to fp32. Next step: try the
+   relaxed-SIMD `i32x4.relaxed_dot_i8x16_i7x16_add` instruction.
+3. **`-C target-cpu=native` makes fp32 slower on both machines** (−19% on the Ryzen,
+   −18% on the cloud VM) while making int8 much faster. My first guess was that the CPU
+   lowers its clock speed for AVX-512 code, but Zen 4 isn't known to do that, and it
+   shows the same regression. That points at the code the compiler generates for
+   `ops::dot`. One candidate: the 8 partial sums may end up in a single vector register,
+   so every fused multiply-add waits for the previous one. Next step: read the
+   assembly (`cargo asm`) and try several independent vector accumulators.
+4. **A small evaluation set misled me.** In the first training run, the first 64
+   validation windows gave a loss of 1.30, but the full validation set gave 1.47. The
+   start of the held-out text is simply easier than average. All numbers above use the
+   whole validation set.
+5. **The model is starting to overfit.** At the end of training, training loss is 1.18
    and validation loss is 1.45 (see the curve). More dropout or more data would likely
-   help more than more steps.
+   help more than more steps. With 48-second runs on the GPU, this is now cheap to
+   explore.
 
 ## Run it yourself
 
 ```bash
-# 1. Train (about 30 minutes on 4 CPU cores; see below for GPU)
+# 1. Train (under a minute on an RTX 5070, about 30 minutes on 4 CPU cores)
 pip install -r train/requirements.txt
 python train/prepare.py
 python train/train.py
@@ -188,7 +208,14 @@ On Windows, Rust and Python both work natively. Run the `.sh` scripts from Git B
 
 ## Next steps
 
+- **Fix the fp32 regression under `target-cpu=native`** by splitting `ops::dot` across
+  several independent vector accumulators, then check the assembly.
+- **Confirm the cache explanation** by counting cache misses (AMD uProf or `perf`)
+  for fp32 and int8, or by benchmarking a model too large for the 96 MB L3.
 - **Int4 quantization** (two weights per byte), and a comparison of quality against int8.
 - **An int8 model file**, to cut the browser download from 20 MB to about 6 MB.
-- **Explicit SIMD kernels** (AVX2 `vpmaddubsw`, WebAssembly relaxed-SIMD dot products) to make int8 faster than fp32 instead of just smaller.
-- **Run the int8 matmul on a custom RISC-V core.** I built a pipelined RV32I processor on FPGA in a previous project. The next step is a custom dot-product instruction.
+- **Faster int8 in the browser** with WebAssembly relaxed-SIMD dot products.
+- **A hyperparameter sweep on the GPU** (dropout, model size, context length) to reduce
+  overfitting.
+- **Run the int8 matmul on a custom RISC-V core.** I built a pipelined RV32I processor on
+  FPGA in a previous project. The next step is a custom dot-product instruction.
