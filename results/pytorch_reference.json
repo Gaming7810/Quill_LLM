@@ -1,6 +1,6 @@
 {
-  "val_loss": 1.4726,
-  "perplexity": 4.3607,
+  "val_loss": 1.469,
+  "perplexity": 4.3447,
   "windows": 871,
   "seq_len": 128,
   "train_iter": 2000
