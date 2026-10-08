@@ -90,7 +90,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", default=os.path.join(ROOT, "train", "out", "ckpt.pt"))
     p.add_argument("--out-dir", default=os.path.join(ROOT, "models"))
-    p.add_argument("--windows", type=int, default=64, help="validation windows for the reference loss")
+    p.add_argument("--windows", type=int, default=1_000_000, help="max validation windows (default: all)")
     args = p.parse_args()
 
     ckpt = torch.load(args.ckpt, map_location="cpu")

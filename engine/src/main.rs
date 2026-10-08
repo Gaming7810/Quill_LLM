@@ -190,7 +190,7 @@ fn report(args: &Args) -> Result<()> {
     let model_path = args.str("model", "models/shakespeare.bin");
     let data = std::fs::read(args.str("data", "data/val.bin"))?;
     let steps: usize = args.get("steps", 256)?;
-    let windows: usize = args.get("windows", 64)?;
+    let windows: usize = args.get("windows", usize::MAX)?;
     let max_threads: usize = args.get("threads", std::thread::available_parallelism()?.get())?;
     let out_path = args.str("out", "results/benchmarks.json");
 
@@ -206,6 +206,8 @@ fn report(args: &Args) -> Result<()> {
 
     let mut rows = Vec::new();
     let mut fp32 = load(&model_path, false)?;
+    let windows = windows.min((data.len() - 1) / fp32.config.max_seq_len);
+    let steps = steps.min(fp32.config.max_seq_len);
     for q8 in [false, true] {
         let mut model = load(&model_path, q8)?;
         let (linear, other) = model.weight_bytes();
@@ -317,7 +319,7 @@ fn run() -> Result<()> {
         "ppl" => {
             let mut model = load(&model_path, args.q8())?;
             let data = std::fs::read(args.str("data", "data/val.bin"))?;
-            let windows = args.get("windows", 64)?;
+            let windows = args.get("windows", usize::MAX)?;
             let eval = with_threads(threads, || evaluate(&mut model, &data, windows, None))?;
             println!(
                 "val loss {:.4}, perplexity {:.4}",
