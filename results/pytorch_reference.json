@@ -1,0 +1,7 @@
+{
+  "val_loss": 1.469,
+  "perplexity": 4.3447,
+  "windows": 871,
+  "seq_len": 128,
+  "train_iter": 2000
+}

@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - run: cargo fmt --check
+      - run: cargo clippy --release --all-targets -- -D warnings
+      - name: Unit tests and PyTorch parity tests
+        run: cargo test --release
+      - name: CLI smoke test
+        working-directory: .
+        run: cargo run --release --manifest-path engine/Cargo.toml -- generate --steps 100 --q8
+      - name: WebAssembly build + Node smoke test
+        working-directory: .
+        run: scripts/build_wasm.sh && node scripts/wasm_smoke.mjs

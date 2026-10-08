@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quill — a tiny LLM in your browser</title>
+<style>
+  :root {
+    --bg: #faf8f5; --fg: #1f1d1a; --muted: #6b665e; --panel: #ffffff;
+    --border: #e4dfd7; --accent: #8a3b12;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161513; --fg: #ece8e1; --muted: #a29b90; --panel: #1f1d1a;
+      --border: #34302b; --accent: #e08a5c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  p.lede { color: var(--muted); margin: 0 0 24px; }
+  a { color: var(--accent); }
+  .controls { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; margin-bottom: 16px; }
+  .controls .full { grid-column: 1 / -1; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
+  textarea, select, input[type=number] {
+    font: inherit; color: var(--fg); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  textarea { font-family: ui-monospace, Menlo, Consolas, monospace; resize: vertical; min-height: 64px; }
+  input[type=range] { accent-color: var(--accent); }
+  .buttons { display: flex; gap: 8px; }
+  button {
+    font: inherit; padding: 8px 18px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--bg);
+  }
+  button.secondary { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  pre#output {
+    white-space: pre-wrap; word-wrap: break-word; min-height: 240px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; margin: 16px 0 8px;
+  }
+  pre#output .prompt { color: var(--muted); }
+  #stats { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  @media (max-width: 520px) { .controls { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Quill</h1>
+  <p class="lede">
+    A 5M-parameter transformer trained on Shakespeare, running entirely in your browser
+    through a Rust inference engine compiled to WebAssembly. Nothing is sent to a server.
+    <a href="https://github.com/gaming7810/neww">Source &amp; benchmarks</a>
+  </p>
+
+  <div class="controls">
+    <label class="full">Prompt
+      <textarea id="prompt">ROMEO:
+</textarea>
+    </label>
+    <label>Weights
+      <select id="precision">
+        <option value="0">fp32 (exact)</option>
+        <option value="1">int8 (quantized)</option>
+      </select>
+    </label>
+    <label><span>Temperature: <span id="tempValue">0.8</span></span>
+      <input id="temp" type="range" min="0" max="1.5" step="0.05" value="0.8">
+    </label>
+    <label>Characters to generate
+      <input id="steps" type="number" min="1" max="5000" value="600">
+    </label>
+    <label>Seed
+      <input id="seed" type="number" min="1" value="42">
+    </label>
+  </div>
+
+  <div class="buttons">
+    <button id="run" disabled>Loading…</button>
+    <button id="stop" class="secondary" disabled>Stop</button>
+  </div>
+
+  <pre id="output" aria-live="polite"></pre>
+  <div id="stats"></div>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

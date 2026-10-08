@@ -1,0 +1,26 @@
+[package]
+name = "quill"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+description = "A from-scratch inference engine for a small Llama-style transformer, with int8 quantization."
+license = "MIT"
+
+[[bin]]
+name = "quill"
+path = "src/main.rs"
+required-features = ["parallel"]
+
+[features]
+default = ["parallel"]
+# Multi-threaded matmuls via rayon. Disabled for the WebAssembly build.
+parallel = ["dep:rayon"]
+
+[dependencies]
+rayon = { version = "1.10", optional = true }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

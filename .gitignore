@@ -1,0 +1,12 @@
+# dataset (re-created by train/prepare.py)
+data/
+# training checkpoints and logs
+train/out/
+train/train_stdout.txt
+__pycache__/
+# rust
+engine/target/
+# built by scripts/build_wasm.sh / the Pages workflow
+docs/quill.wasm
+docs/shakespeare.bin
+runs/
