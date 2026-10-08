@@ -136,7 +136,7 @@ the same number, as it should.
 ## Run it yourself
 
 ```bash
-# 1. Train (about 40 minutes on 4 CPU cores)
+# 1. Train (about 30 minutes on 4 CPU cores; see below for GPU)
 pip install -r train/requirements.txt
 python train/prepare.py
 python train/train.py
@@ -156,6 +156,35 @@ python -m http.server -d docs   # open http://localhost:8000
 ```
 
 A trained model is checked in (`models/shakespeare.bin`), so step 1 is optional.
+
+### Training on a GPU
+
+`train.py` uses a CUDA GPU automatically when PyTorch can see one. The forward pass
+runs in bf16 mixed precision, while weights and optimizer state stay in fp32. The
+checkpoint format is the same, so `export.py` and the engine need no changes.
+
+```bash
+# RTX 50-series cards need a PyTorch build with CUDA 12.8 or newer
+pip install torch --index-url https://download.pytorch.org/whl/cu128
+python -c "import torch; print(torch.cuda.get_device_name())"   # check the GPU is visible
+
+python train/train.py                       # same model as above, now on the GPU
+python train/train.py --compile             # optional: torch.compile (needs Triton; on Windows use WSL)
+
+# A bigger model with a longer context (dim and hidden-dim must be multiples of 32)
+python train/train.py --dim 384 --n-layers 8 --n-heads 8 --hidden-dim 1152 \
+    --seq-len 256 --batch-size 64 --max-iters 5000
+```
+
+For experiments that shouldn't overwrite the published results, point the outputs elsewhere:
+
+```bash
+python train/train.py --dropout 0.2 --out runs/drop02 --log runs/drop02/log.csv
+python train/export.py --ckpt runs/drop02/ckpt.pt --out-dir runs/drop02 --reference runs/drop02/ref.json
+QUILL_MODEL_DIR=runs/drop02 cargo test --release --manifest-path engine/Cargo.toml   # parity check
+```
+
+On Windows, Rust and Python both work natively. Run the `.sh` scripts from Git Bash or WSL.
 
 ## Next steps
 

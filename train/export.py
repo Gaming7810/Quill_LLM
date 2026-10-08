@@ -91,6 +91,8 @@ def main():
     p.add_argument("--ckpt", default=os.path.join(ROOT, "train", "out", "ckpt.pt"))
     p.add_argument("--out-dir", default=os.path.join(ROOT, "models"))
     p.add_argument("--windows", type=int, default=1_000_000, help="max validation windows (default: all)")
+    p.add_argument("--reference", default=os.path.join(ROOT, "results", "pytorch_reference.json"),
+                   help="where to write the PyTorch reference loss")
     args = p.parse_args()
 
     ckpt = torch.load(args.ckpt, map_location="cpu")
@@ -109,8 +111,8 @@ def main():
     loss, n = reference_val_loss(model, val, args.windows)
     ref = {"val_loss": round(loss, 4), "perplexity": round(math.exp(loss), 4), "windows": n,
            "seq_len": cfg.max_seq_len, "train_iter": ckpt["iter"]}
-    os.makedirs(os.path.join(ROOT, "results"), exist_ok=True)
-    with open(os.path.join(ROOT, "results", "pytorch_reference.json"), "w") as f:
+    os.makedirs(os.path.dirname(os.path.abspath(args.reference)), exist_ok=True)
+    with open(args.reference, "w") as f:
         json.dump(ref, f, indent=2)
     print(f"PyTorch reference: {ref}")
 

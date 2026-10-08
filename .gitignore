@@ -9,3 +9,4 @@ engine/target/
 # built by scripts/build_wasm.sh / the Pages workflow
 docs/quill.wasm
 docs/shakespeare.bin
+runs/
